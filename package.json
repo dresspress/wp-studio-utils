@@ -1,7 +1,7 @@
 {
   "name": "@dresspress/wp-studio-utils",
   "version": "1.1.2",
-  "description": "Developer workflow utilities for WordPress Studio and DressPress plugins.",
+  "description": "A lightweight CLI wrapper for WordPress Studio that simplifies plugin development by linking project directories and automating site access.",
   "main": "index.js",
   "bin": {
     "dp-studio": "bin/cli.js"
