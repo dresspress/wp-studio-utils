@@ -4,10 +4,19 @@
   "description": "Developer workflow utilities for WordPress Studio and DressPress plugins.",
   "main": "index.js",
   "bin": {
-    "dp-studio": "./bin/cli.js"
+    "dp-studio": "bin/cli.js"
   },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dresspress/wp-studio-utils.git"
   },
   "keywords": [
     "wordpress",
@@ -18,6 +27,6 @@
   "author": "DressPress",
   "license": "MIT",
   "dependencies": {
-    "inquirer": "^8.2.7"
+    "inquirer": "^8.0.0"
   }
 }
