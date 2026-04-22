@@ -27,7 +27,7 @@ dp-studio wp plugin list
 ```
 
 ### 3. Fast Admin Access
-Open your site in **Google Chrome** (new window) without leaving your plugin folder:
+Open your site in **system default browser** (new window) without leaving your plugin folder:
 ```bash
 dp-studio open          # Opens WP Admin (Default)
 dp-studio open site     # Opens the Site Frontend
@@ -67,8 +67,20 @@ npm link
 
 - [WordPress Studio](https://developer.wordpress.com/studio/) (CLI enabled).
 - Node.js (v16+).
-- Google Chrome (required for `open` command).
+- System default browser.
 
 ## License
 
 MIT © [DressPress](https://github.com/dresspress)
+
+---
+
+### Pro Tip: Use `studio` as an Alias
+
+If you want to use the smart features of `dp-studio` seamlessly, add this alias to your `.zshrc` or `.bashrc`:
+
+```bash
+alias studio="dp-studio"
+```
+
+Now, when you run `studio site status` from your plugin directory, it will automatically detect your environment without you ever needing to type `--path`.

@@ -135,7 +135,7 @@ function handleOpen(type = 'admin') {
 
     const url = (type === 'site') ? status.siteUrl : status.autoLoginUrl;
     console.log(`Opening ${type} URL in Chrome...`);
-    execSync(`open -na "Google Chrome" --args --new-window "${url}"`);
+    execSync(`open "${url}"`);
 }
 
 /**
