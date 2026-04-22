@@ -1,20 +1,20 @@
 .PHONY: patch minor major test
 
-# 默认运行测试
+# Run tests
 test:
 	npm test
 
-# 发布补丁版本 (1.1.x -> 1.1.x+1) - 修复 bug
+# Publish a patch version (1.1.x -> 1.1.x+1) - bug fixes
 patch:
 	npm version patch
 	git push origin main --tags
 
-# 发布次要版本 (1.1.x -> 1.2.0) - 新功能
+# Publish a minor version (1.1.x -> 1.2.0) - new features
 minor:
 	npm version minor
 	git push origin main --tags
 
-# 发布主要版本 (1.x.x -> 2.0.0) - 重大更新
+# Publish a major version (1.x.x -> 2.0.0) - breaking changes
 major:
 	npm version major
 	git push origin main --tags
