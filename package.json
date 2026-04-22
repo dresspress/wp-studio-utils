@@ -1,6 +1,6 @@
 {
   "name": "@dresspress/wp-studio-utils",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Developer workflow utilities for WordPress Studio and DressPress plugins.",
   "main": "index.js",
   "bin": {
