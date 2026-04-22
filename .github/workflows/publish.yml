@@ -12,14 +12,34 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
-      id-token: write # Required for OIDC
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
-      # Simplified for OIDC: no NODE_AUTH_TOKEN needed
       - run: npm publish --access public
+      
+  sync-metadata:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync description to GitHub
+        run: |
+          TARGET_DESC=$(jq -r '.description' package.json)
+          CURRENT_DESC=$(gh repo view ${{ github.repository }} --json description -q .description)
+          
+          echo "Current: $CURRENT_DESC"
+          echo "Target:  $TARGET_DESC"
+          
+          if [ "$CURRENT_DESC" != "$TARGET_DESC" ]; then
+            echo "Updating GitHub description..."
+            gh repo edit ${{ github.repository }} --description "$TARGET_DESC"
+          else
+            echo "Already up to date."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
