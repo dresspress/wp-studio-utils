@@ -1,5 +1,6 @@
 name: Publish to NPM
 
+# Standard top-level permissions for OIDC
 permissions:
   id-token: write
   contents: read
@@ -20,24 +21,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
-      
-      # Diagnostic Step: Check if GitHub actually issued an OIDC token
-      - name: OIDC Diagnostic
-        run: |
-          echo "=== OIDC Environment Check ==="
-          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
-            echo "✅ OIDC Identity Token URL is present."
-          else
-            echo "❌ OIDC Identity Token URL is MISSING."
-          fi
-          echo "Checking registry connectivity..."
-          # This should show the org name if OIDC is working
-          npm whoami --registry https://registry.npmjs.org || echo "NPM reports: Not authenticated."
-          echo "=============================="
-
+      # Official OIDC publishing: Map the internal GITHUB_TOKEN to NODE_AUTH_TOKEN
       - run: npm publish --access public
-      
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   sync-metadata:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -48,8 +38,14 @@ jobs:
           TARGET_DESC=$(jq -r '.description' package.json)
           CURRENT_DESC=$(gh repo view ${{ github.repository }} --json description -q .description)
           
+          echo "Current: $CURRENT_DESC"
+          echo "Target:  $TARGET_DESC"
+          
           if [ "$CURRENT_DESC" != "$TARGET_DESC" ]; then
+            echo "Updating GitHub description..."
             gh repo edit ${{ github.repository }} --description "$TARGET_DESC"
+          else
+            echo "Already up to date."
           fi
         env:
           GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
