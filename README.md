@@ -1,60 +1,48 @@
 # @dresspress/wp-studio-utils
 
-A smart developer toolchain to bridge the gap between your standalone plugin directories and [WordPress Studio](https://developer.wordpress.com/studio/) environments.
+A lightweight CLI wrapper for [WordPress Studio](https://developer.wordpress.com/studio/) that simplifies plugin development by linking project directories and automating site access.
 
-## Quick Start
+## Installation
 
-### Installation
-
-Install globally via NPM:
 ```bash
 npm install -g @dresspress/wp-studio-utils
 ```
 
-### 1. Bind Plugin to Studio
-Run this from your **plugin's root directory**:
+## Quick Start
+
+### 1. Link a project
+Run this inside your plugin's root directory:
 ```bash
 dp-studio link
 ```
-- **Interactive Mode**: If no site name is provided, it scans `~/Studio` and lets you pick from a list.
-- **What it does**: Creates a symlink in Studio's plugin folder and generates `wp-studio-env.json` locally.
+It creates a symlink to your Studio site's plugin folder and saves environment metadata to `wp-studio-env.json`.
 
-### 2. Smart Proxy (Environment Aware)
-Once linked, use `dp-studio` instead of `studio` to automatically target the correct site without passing `--path`:
+### 2. Auto-detect environment
+Any standard `studio` command run from your project root will automatically target the linked site:
 ```bash
-dp-studio site status   # Auto-detects the linked site path
+dp-studio site status   # No need to pass --path
 dp-studio wp plugin list
 ```
 
-### 3. Fast Admin Access
-Open your site in **system default browser** (new window) without leaving your plugin folder:
+### 3. Open site
 ```bash
-dp-studio open          # Opens WP Admin (Default)
-dp-studio open site     # Opens the Site Frontend
+dp-studio open          # Opens WP Admin in default browser
+dp-studio open site     # Opens site frontend
 ```
 
----
-
-## Why use `dp-studio`?
-
-When developing multiple plugins, you often keep them in a dedicated `Projects` folder, not directly inside the Studio site's `wp-content/plugins` directory. `dp-studio` solves this by:
-- **Automatic Symlinking**: No more manual `ln -s` commands.
-- **Zero Context Switching**: Run Studio/WP-CLI commands directly from your project root.
-- **AI-Ready**: The `wp-studio-env.json` file serves as a "source of truth" for AI coding assistants to discover the linked environment.
-
-## Advanced Usage
-
-### Sync Environment
-Refresh the local `wp-studio-env.json` with the latest site status (URL, credentials, versions):
+### 4. Sync environment
 ```bash
-dp-studio env
+dp-studio env           # Refreshes local wp-studio-env.json with latest site status
 ```
 
----
+## Alias (Recommended)
 
-## Development & Contribution
+To use `dp-studio` as a drop-in replacement for `studio`, add this to your `.zshrc`:
+```bash
+alias studio="dp-studio"
+```
 
-If you want to contribute to this tool:
+## Development
 
 ```bash
 git clone https://github.com/dresspress/wp-studio-utils.git
@@ -63,24 +51,6 @@ npm install
 npm link
 ```
 
-## Requirements
-
-- [WordPress Studio](https://developer.wordpress.com/studio/) (CLI enabled).
-- Node.js (v16+).
-- System default browser.
-
 ## License
 
 MIT © [DressPress](https://github.com/dresspress)
-
----
-
-### Pro Tip: Use `studio` as an Alias
-
-If you want to use the smart features of `dp-studio` seamlessly, add this alias to your `.zshrc` or `.bashrc`:
-
-```bash
-alias studio="dp-studio"
-```
-
-Now, when you run `studio site status` from your plugin directory, it will automatically detect your environment without you ever needing to type `--path`.
