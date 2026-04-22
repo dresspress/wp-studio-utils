@@ -2,13 +2,15 @@ name: Publish to NPM
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
 
 jobs:
   publish:
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    # 必须添加 permissions 字段以支持 OIDC (Trusted Publishing)
     permissions:
       id-token: write
       contents: read
@@ -18,8 +20,20 @@ jobs:
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
-      
       - run: npm ci
-      
-      # 使用 --provenance 增加发布的可信度（可选，推荐）
       - run: npm publish --access public --provenance
+
+  sync-metadata:
+    runs-on: ubuntu-latest
+    permissions:
+      repository-projects: write # 需要修改仓库元数据的权限
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sync description to GitHub About
+        run: |
+          DESCRIPTION=$(jq -r '.description' package.json)
+          echo "Updating description to: $DESCRIPTION"
+          gh repo edit ${{ github.repository }} --description "$DESCRIPTION"
+        env:
+          GH_TOKEN: ${{ github.token }}
