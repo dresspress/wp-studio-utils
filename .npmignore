@@ -1,0 +1,4 @@
+node_modules/
+.DS_Store
+*.log
+wp-studio-env.json
