@@ -26,30 +26,24 @@ jobs:
   sync-metadata:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      # Note: administration: write is required to edit repo metadata via GITHUB_TOKEN
-      # If this still fails, you might need a Personal Access Token (PAT)
+      contents: read
+      # This is the key: administration: write is needed for gh repo edit
+      administration: write
     steps:
       - uses: actions/checkout@v4
-      - name: Sync description and topics to GitHub
+      - name: Sync description to GitHub
         run: |
-          # 1. Get current description from GitHub
-          CURRENT_DESC=$(gh repo view ${{ github.repository }} --json description -q .description)
-          # 2. Get target description from package.json
           TARGET_DESC=$(jq -r '.description' package.json)
+          CURRENT_DESC=$(gh repo view ${{ github.repository }} --json description -q .description)
           
           echo "Current: $CURRENT_DESC"
           echo "Target:  $TARGET_DESC"
           
-          # 3. Only update if different
           if [ "$CURRENT_DESC" != "$TARGET_DESC" ]; then
             echo "Updating GitHub description..."
             gh repo edit ${{ github.repository }} --description "$TARGET_DESC"
           else
-            echo "Description is already up to date."
+            echo "Already up to date."
           fi
-          
-          # 4. Also sync topics (optional but recommended)
-          # gh repo edit ${{ github.repository }} --add-topic "wordpress,studio,cli,workflow"
         env:
           GH_TOKEN: ${{ github.token }}
