@@ -3,18 +3,23 @@ name: Publish to NPM
 on:
   push:
     tags:
-      - 'v*' # 当你推送以 v 开头的标签时触发，例如 v1.1.1
+      - 'v*'
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # 必须添加 permissions 字段以支持 OIDC (Trusted Publishing)
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
+      
       - run: npm ci
-      - run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      
+      # 使用 --provenance 增加发布的可信度（可选，推荐）
+      - run: npm publish --access public --provenance
