@@ -1,6 +1,5 @@
 name: Publish to NPM
 
-# Top-level permissions: The official GitHub standard for OIDC
 permissions:
   id-token: write
   contents: read
@@ -22,7 +21,21 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-      # Clean OIDC publish: npm will automatically detect and exchange the identity token
+      
+      # Diagnostic Step: Check if GitHub actually issued an OIDC token
+      - name: OIDC Diagnostic
+        run: |
+          echo "=== OIDC Environment Check ==="
+          if [ -n "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+            echo "✅ OIDC Identity Token URL is present."
+          else
+            echo "❌ OIDC Identity Token URL is MISSING."
+          fi
+          echo "Checking registry connectivity..."
+          # This should show the org name if OIDC is working
+          npm whoami --registry https://registry.npmjs.org || echo "NPM reports: Not authenticated."
+          echo "=============================="
+
       - run: npm publish --access public
       
   sync-metadata:
