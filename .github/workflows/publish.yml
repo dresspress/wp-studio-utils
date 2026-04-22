@@ -25,10 +25,6 @@ jobs:
 
   sync-metadata:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      # This is the key: administration: write is needed for gh repo edit
-      administration: write
     steps:
       - uses: actions/checkout@v4
       - name: Sync description to GitHub
@@ -46,4 +42,5 @@ jobs:
             echo "Already up to date."
           fi
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Use the manually created PAT with 'repo' scope
+          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
