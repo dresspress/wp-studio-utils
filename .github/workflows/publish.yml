@@ -21,26 +21,5 @@ jobs:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
-      - run: npm publish --access public --provenance
-
-  sync-metadata:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Sync description to GitHub
-        run: |
-          TARGET_DESC=$(jq -r '.description' package.json)
-          CURRENT_DESC=$(gh repo view ${{ github.repository }} --json description -q .description)
-          
-          echo "Current: $CURRENT_DESC"
-          echo "Target:  $TARGET_DESC"
-          
-          if [ "$CURRENT_DESC" != "$TARGET_DESC" ]; then
-            echo "Updating GitHub description..."
-            gh repo edit ${{ github.repository }} --description "$TARGET_DESC"
-          else
-            echo "Already up to date."
-          fi
-        env:
-          # Use the manually created PAT with 'repo' scope
-          GH_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+      # Removed --provenance for now to ensure a baseline successful publish via OIDC
+      - run: npm publish --access public
