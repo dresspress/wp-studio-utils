@@ -4,17 +4,17 @@
 test:
 	npm test
 
-# Publish a patch version (1.1.x -> 1.1.x+1) - bug fixes
+# Publish a patch version and push the release tag to GitHub Actions.
 patch:
 	npm version patch
 	git push origin main --tags
 
-# Publish a minor version (1.1.x -> 1.2.0) - new features
+# Publish a minor version and push the release tag to GitHub Actions.
 minor:
 	npm version minor
 	git push origin main --tags
 
-# Publish a major version (1.x.x -> 2.0.0) - breaking changes
+# Publish a major version and push the release tag to GitHub Actions.
 major:
 	npm version major
 	git push origin main --tags
