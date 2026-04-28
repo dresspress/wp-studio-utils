@@ -22,10 +22,20 @@ function readEnv() {
     return null;
 }
 
+function stripAnsi(str) {
+    const pattern = [
+        '[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*)?\\u0007)',
+        '(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))'
+    ].join('|');
+
+    const regex = new RegExp(pattern, 'g');
+    return str.replace(regex, '');
+}
+
 function parseJsonFromOutput(rawOutput) {
-    const trimmedOutput = rawOutput.trim();
-    const arrayStartIndex = trimmedOutput.indexOf('[');
-    const objectStartIndex = trimmedOutput.indexOf('{');
+    const cleanOutput = stripAnsi(rawOutput).trim();
+    const arrayStartIndex = cleanOutput.indexOf('[');
+    const objectStartIndex = cleanOutput.indexOf('{');
     let jsonStartIndex = -1;
 
     if (arrayStartIndex === -1) {
@@ -40,7 +50,7 @@ function parseJsonFromOutput(rawOutput) {
         return null;
     }
 
-    return JSON.parse(trimmedOutput.substring(jsonStartIndex));
+    return JSON.parse(cleanOutput.substring(jsonStartIndex));
 }
 
 function runStudioJson(args) {
