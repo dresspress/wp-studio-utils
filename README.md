@@ -37,8 +37,6 @@ dp-studio wp plugin list
 ```bash
 dp-studio open          # Opens WP Admin in the default browser
 dp-studio open site     # Opens site frontend
-dp-studio open --new    # Opens WP Admin in a new browser window on macOS
-dp-studio open site -n  # Opens site frontend in a new browser window on macOS
 ```
 
 ### 4. Sync environment

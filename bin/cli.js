@@ -77,12 +77,10 @@ function getStudioSites() {
     return Array.isArray(sites) ? sites : [];
 }
 
-function getOpenCommand(url, options = {}) {
-    const { newWindow = false } = options;
-
+function getOpenCommand(url) {
     switch (process.platform) {
         case 'darwin':
-            return { command: 'open', args: newWindow ? ['-n', url] : [url] };
+            return { command: 'open', args: [url] };
         case 'win32':
             return { command: 'cmd', args: ['/c', 'start', '', url] };
         default:
@@ -90,8 +88,8 @@ function getOpenCommand(url, options = {}) {
     }
 }
 
-function openUrl(url, options = {}) {
-    const { command, args } = getOpenCommand(url, options);
+function openUrl(url) {
+    const { command, args } = getOpenCommand(url);
     const result = spawnSync(command, args, { stdio: 'ignore' });
 
     if (result.error || result.status !== 0) {
@@ -222,14 +220,8 @@ function handleOpen(type = 'admin') {
     }
 
     const url = (type === 'site') ? status.siteUrl : status.autoLoginUrl;
-    const openInNewWindow = args.includes('--new') || args.includes('-n');
-
-    if (openInNewWindow && process.platform !== 'darwin') {
-        console.warn('Warning: --new is currently only supported on macOS. Opening with the default browser behavior instead.');
-    }
-
-    console.log(`Opening ${type} URL in the default browser${openInNewWindow ? ' (new window)' : ''}...`);
-    openUrl(url, { newWindow: openInNewWindow });
+    console.log(`Opening ${type} URL in the default browser...`);
+    openUrl(url);
 }
 /**
  * dp-studio env
@@ -282,7 +274,6 @@ Commands:
 
 Options:
   --force, -f         Force overwrite existing symlink or directory (for 'link')
-  --new, -n           Open URL in a new browser window on macOS (for 'open')
   --refresh, -r       Force refresh site status from Studio (slow)
   --help, -h          Show this help message
 
