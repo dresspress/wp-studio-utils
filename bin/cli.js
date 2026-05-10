@@ -124,6 +124,16 @@ function getApplicationPath(bundleId) {
     }
 }
 
+function getApplicationName(bundleId) {
+    const appPath = getApplicationPath(bundleId);
+
+    if (!appPath) {
+        return null;
+    }
+
+    return path.basename(appPath, '.app');
+}
+
 function isChromiumBrowser(bundleId) {
     return [
         'com.google.Chrome',
@@ -137,16 +147,41 @@ function isChromiumBrowser(bundleId) {
     ].includes(bundleId);
 }
 
-function openUrlInNewChromiumWindow(bundleId, url) {
-    const appPath = getApplicationPath(bundleId);
+function openUrlInDockNewWindow(bundleId, url) {
+    const appName = getApplicationName(bundleId);
 
-    if (!appPath) {
+    if (!appName) {
         return false;
     }
 
-    const executableName = path.basename(appPath, '.app');
-    const binaryPath = path.join(appPath, 'Contents', 'MacOS', executableName);
-    const result = spawnSync(binaryPath, ['--new-window', url], { stdio: 'ignore' });
+    const escapedBundleId = escapeAppleScriptString(bundleId);
+    const escapedAppName = escapeAppleScriptString(appName);
+    const escapedUrl = escapeAppleScriptString(url);
+    const script = `
+        tell application "System Events"
+            tell process "Dock"
+                set dockItem to first UI element of list 1 whose name is "${escapedAppName}"
+                perform action "AXShowMenu" of dockItem
+                delay 0.1
+
+                if exists menu item "New Window" of menu 1 of dockItem then
+                    click menu item "New Window" of menu 1 of dockItem
+                else if exists menu item "新建窗口" of menu 1 of dockItem then
+                    click menu item "新建窗口" of menu 1 of dockItem
+                else
+                    error "New Window menu item not found"
+                end if
+            end tell
+        end tell
+
+        delay 0.2
+
+        tell application id "${escapedBundleId}"
+            set URL of active tab of front window to "${escapedUrl}"
+            activate
+        end tell
+    `;
+    const result = spawnSync('osascript', ['-e', script], { stdio: 'ignore' });
 
     return !result.error && result.status === 0;
 }
@@ -159,7 +194,7 @@ function openUrlInNewMacBrowserWindow(url) {
     }
 
     if (isChromiumBrowser(bundleId)) {
-        return openUrlInNewChromiumWindow(bundleId, url);
+        return openUrlInDockNewWindow(bundleId, url);
     }
 
     const escapedBundleId = escapeAppleScriptString(bundleId);
