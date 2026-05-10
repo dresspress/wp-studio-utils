@@ -77,12 +77,77 @@ function getStudioSites() {
     return Array.isArray(sites) ? sites : [];
 }
 
+function getDefaultBrowserBundleId() {
+    if (process.platform !== 'darwin') {
+        return null;
+    }
+
+    try {
+        const rawOutput = execFileSync('plutil', [
+            '-convert',
+            'json',
+            '-o',
+            '-',
+            path.join(process.env.HOME, 'Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist')
+        ], {
+            stdio: ['pipe', 'pipe', 'ignore'],
+            encoding: 'utf8'
+        });
+        const launchServices = JSON.parse(rawOutput);
+        const handlers = Array.isArray(launchServices.LSHandlers) ? launchServices.LSHandlers : [];
+        const httpsHandler = handlers.find(handler => handler.LSHandlerURLScheme === 'https');
+        const httpHandler = handlers.find(handler => handler.LSHandlerURLScheme === 'http');
+
+        return httpsHandler?.LSHandlerRoleAll || httpHandler?.LSHandlerRoleAll || null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function escapeAppleScriptString(value) {
+    return String(value)
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"');
+}
+
+function openUrlInNewMacBrowserWindow(url) {
+    const bundleId = getDefaultBrowserBundleId();
+
+    if (!bundleId) {
+        return false;
+    }
+
+    const escapedBundleId = escapeAppleScriptString(bundleId);
+    const escapedUrl = escapeAppleScriptString(url);
+    let script;
+
+    if (bundleId === 'com.apple.Safari') {
+        script = `
+            tell application id "${escapedBundleId}"
+                activate
+                make new document with properties {URL:"${escapedUrl}"}
+            end tell
+        `;
+    } else {
+        script = `
+            tell application id "${escapedBundleId}"
+                activate
+                set newWindow to make new window
+                set URL of active tab of newWindow to "${escapedUrl}"
+            end tell
+        `;
+    }
+
+    const result = spawnSync('osascript', ['-e', script], { stdio: 'ignore' });
+    return !result.error && result.status === 0;
+}
+
 function getOpenCommand(url, options = {}) {
     const { newWindow = false } = options;
 
     switch (process.platform) {
         case 'darwin':
-            return { command: 'open', args: newWindow ? ['-n', url] : [url] };
+            return { command: 'open', args: [url] };
         case 'win32':
             return { command: 'cmd', args: ['/c', 'start', '', url] };
         default:
@@ -91,6 +156,10 @@ function getOpenCommand(url, options = {}) {
 }
 
 function openUrl(url, options = {}) {
+    if (options.newWindow && process.platform === 'darwin' && openUrlInNewMacBrowserWindow(url)) {
+        return;
+    }
+
     const { command, args } = getOpenCommand(url, options);
     const result = spawnSync(command, args, { stdio: 'ignore' });
 
