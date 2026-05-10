@@ -110,11 +110,56 @@ function escapeAppleScriptString(value) {
         .replace(/"/g, '\\"');
 }
 
+function getApplicationPath(bundleId) {
+    try {
+        return execFileSync('osascript', [
+            '-e',
+            `POSIX path of (path to application id "${escapeAppleScriptString(bundleId)}")`
+        ], {
+            stdio: ['pipe', 'pipe', 'ignore'],
+            encoding: 'utf8'
+        }).trim();
+    } catch (e) {
+        return null;
+    }
+}
+
+function isChromiumBrowser(bundleId) {
+    return [
+        'com.google.Chrome',
+        'com.google.Chrome.canary',
+        'org.chromium.Chromium',
+        'com.microsoft.edgemac',
+        'com.microsoft.edgemac.Canary',
+        'com.brave.Browser',
+        'com.vivaldi.Vivaldi',
+        'company.thebrowser.Browser'
+    ].includes(bundleId);
+}
+
+function openUrlInNewChromiumWindow(bundleId, url) {
+    const appPath = getApplicationPath(bundleId);
+
+    if (!appPath) {
+        return false;
+    }
+
+    const executableName = path.basename(appPath, '.app');
+    const binaryPath = path.join(appPath, 'Contents', 'MacOS', executableName);
+    const result = spawnSync(binaryPath, ['--new-window', url], { stdio: 'ignore' });
+
+    return !result.error && result.status === 0;
+}
+
 function openUrlInNewMacBrowserWindow(url) {
     const bundleId = getDefaultBrowserBundleId();
 
     if (!bundleId) {
         return false;
+    }
+
+    if (isChromiumBrowser(bundleId)) {
+        return openUrlInNewChromiumWindow(bundleId, url);
     }
 
     const escapedBundleId = escapeAppleScriptString(bundleId);
