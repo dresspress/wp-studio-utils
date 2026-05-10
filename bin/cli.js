@@ -104,51 +104,142 @@ function getDefaultBrowserBundleId() {
     }
 }
 
+function escapeAppleScriptString(value) {
+    return String(value)
+        .replace(/\\/g, '\\\\')
+        .replace(/"/g, '\\"');
+}
+
+function getApplicationPath(bundleId) {
+    try {
+        return execFileSync('osascript', [
+            '-e',
+            `POSIX path of (path to application id "${escapeAppleScriptString(bundleId)}")`
+        ], {
+            stdio: ['pipe', 'pipe', 'ignore'],
+            encoding: 'utf8'
+        }).trim();
+    } catch (e) {
+        return null;
+    }
+}
+
+function getApplicationName(bundleId) {
+    const appPath = getApplicationPath(bundleId);
+
+    if (!appPath) {
+        return null;
+    }
+
+    return path.basename(appPath, '.app');
+}
+
+function isChromiumBrowser(bundleId) {
+    return [
+        'com.google.Chrome',
+        'com.google.Chrome.canary',
+        'org.chromium.Chromium',
+        'com.microsoft.edgemac',
+        'com.microsoft.edgemac.Canary',
+        'com.brave.Browser',
+        'com.vivaldi.Vivaldi',
+        'company.thebrowser.Browser'
+    ].includes(bundleId);
+}
+
+function openUrlInDockNewWindow(bundleId, url) {
+    const appName = getApplicationName(bundleId);
+
+    if (!appName) {
+        return false;
+    }
+
+    const escapedBundleId = escapeAppleScriptString(bundleId);
+    const escapedAppName = escapeAppleScriptString(appName);
+    const escapedUrl = escapeAppleScriptString(url);
+    const script = `
+        tell application "System Events"
+            tell process "Dock"
+                set dockItem to first UI element of list 1 whose name is "${escapedAppName}"
+                perform action "AXShowMenu" of dockItem
+                delay 0.1
+
+                if exists menu item "New Window" of menu 1 of dockItem then
+                    click menu item "New Window" of menu 1 of dockItem
+                else if exists menu item "新建窗口" of menu 1 of dockItem then
+                    click menu item "新建窗口" of menu 1 of dockItem
+                else
+                    error "New Window menu item not found"
+                end if
+            end tell
+        end tell
+
+        delay 0.2
+
+        tell application id "${escapedBundleId}"
+            set URL of active tab of front window to "${escapedUrl}"
+            activate
+        end tell
+    `;
+    const result = spawnSync('osascript', ['-e', script], { stdio: 'ignore' });
+
+    return !result.error && result.status === 0;
+}
+
+function openUrlInNewMacBrowserWindow(url) {
+    const bundleId = getDefaultBrowserBundleId();
+
+    if (!bundleId) {
+        return false;
+    }
+
+    if (isChromiumBrowser(bundleId)) {
+        return openUrlInDockNewWindow(bundleId, url);
+    }
+
+    const escapedBundleId = escapeAppleScriptString(bundleId);
+    const escapedUrl = escapeAppleScriptString(url);
+    let script;
+
+    if (bundleId === 'com.apple.Safari') {
+        script = `
+            tell application id "${escapedBundleId}"
+                activate
+                make new document with properties {URL:"${escapedUrl}"}
+            end tell
+        `;
+    } else {
+        script = `
+            tell application id "${escapedBundleId}"
+                activate
+                set newWindow to make new window
+                set URL of active tab of newWindow to "${escapedUrl}"
+            end tell
+        `;
+    }
+
+    const result = spawnSync('osascript', ['-e', script], { stdio: 'ignore' });
+    return !result.error && result.status === 0;
+}
+
 function getOpenCommand(url, options = {}) {
     const { newWindow = false } = options;
 
     switch (process.platform) {
         case 'darwin':
-            return getMacOpenCommand(url, { newWindow });
+            return { command: 'open', args: [url] };
         case 'win32':
-            return getWindowsOpenCommand(url, { newWindow });
+            return { command: 'cmd', args: ['/c', 'start', '', url] };
         default:
-            return getLinuxOpenCommand(url, { newWindow });
+            return { command: 'xdg-open', args: [url] };
     }
-}
-
-function getMacOpenCommand(url, options = {}) {
-    const { newWindow = false } = options;
-    const bundleId = getDefaultBrowserBundleId();
-
-    if (newWindow && bundleId) {
-        return { command: 'open', args: ['-b', bundleId, '-n', url] };
-    }
-
-    return { command: 'open', args: [url] };
-}
-
-function getWindowsOpenCommand(url, options = {}) {
-    const { newWindow = false } = options;
-
-    if (newWindow) {
-        return { command: 'cmd', args: ['/c', 'start', '', url] };
-    }
-
-    return { command: 'cmd', args: ['/c', 'start', '', url] };
-}
-
-function getLinuxOpenCommand(url, options = {}) {
-    const { newWindow = false } = options;
-
-    if (newWindow) {
-        return { command: 'xdg-open', args: [url] };
-    }
-
-    return { command: 'xdg-open', args: [url] };
 }
 
 function openUrl(url, options = {}) {
+    if (options.newWindow && process.platform === 'darwin' && openUrlInNewMacBrowserWindow(url)) {
+        return;
+    }
+
     const { command, args } = getOpenCommand(url, options);
     const result = spawnSync(command, args, { stdio: 'ignore' });
 
@@ -282,8 +373,8 @@ function handleOpen(type = 'admin') {
     const url = (type === 'site') ? status.siteUrl : status.autoLoginUrl;
     const openInNewWindow = args.includes('--new') || args.includes('-n');
 
-    if (openInNewWindow) {
-        console.warn('Warning: --new is a best-effort option. New-window behavior depends on the current OS and browser.');
+    if (openInNewWindow && process.platform !== 'darwin') {
+        console.warn('Warning: --new is currently only supported on macOS. Opening with the default browser behavior instead.');
     }
 
     console.log(`Opening ${type} URL in the default browser${openInNewWindow ? ' (new window)' : ''}...`);
@@ -340,7 +431,7 @@ Commands:
 
 Options:
   --force, -f         Force overwrite existing symlink or directory (for 'link')
-  --new, -n           Best-effort open URL in a new browser window (for 'open')
+  --new, -n           Open URL in a new browser window on macOS (for 'open')
   --refresh, -r       Force refresh site status from Studio (slow)
   --help, -h          Show this help message
 
