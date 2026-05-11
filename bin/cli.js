@@ -4,9 +4,22 @@ const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const inquirer = require('inquirer');
+const https = require('https');
+const os = require('os');
 
 const args = process.argv.slice(2);
 const ENV_FILE = 'wp-studio-env.json';
+
+const colors = {
+    reset: "\x1b[0m",
+    bright: "\x1b[1m",
+    dim: "\x1b[2m",
+    green: "\x1b[32m",
+    yellow: "\x1b[33m",
+    blue: "\x1b[34m",
+    cyan: "\x1b[36m",
+    red: "\x1b[31m",
+};
 
 /**
  * 读取环境配置（如果存在）
@@ -260,6 +273,150 @@ function handleEnv() {
     }
 }
 
+function downloadFile(url, dest) {
+    return new Promise((resolve, reject) => {
+        const file = fs.createWriteStream(dest);
+        const request = https.get(url, (response) => {
+            if (response.statusCode === 301 || response.statusCode === 302) {
+                return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
+            }
+            if (response.statusCode !== 200) {
+                return reject(new Error(`Failed to get '${url}' (${response.statusCode})`));
+            }
+            response.pipe(file);
+            file.on('finish', () => {
+                file.close(resolve);
+            });
+        }).on('error', (err) => {
+            fs.unlink(dest, () => {});
+            reject(err);
+        });
+        
+        request.setTimeout(60000, () => {
+            request.destroy();
+            reject(new Error("Download timeout"));
+        });
+    });
+}
+
+function compareVersions(v1, v2) {
+    const parse = (v) => v.split('-')[0].split('.').map(Number);
+    const p1 = parse(v1);
+    const p2 = parse(v2);
+    for(let i = 0; i < Math.max(p1.length, p2.length); i++) {
+        const n1 = p1[i] || 0;
+        const n2 = p2[i] || 0;
+        if (n1 > n2) return 1;
+        if (n1 < n2) return -1;
+    }
+    const suffix1 = v1.includes('-') ? v1.split('-').slice(1).join('-') : '';
+    const suffix2 = v2.includes('-') ? v2.split('-').slice(1).join('-') : '';
+    
+    if (!suffix1 && suffix2) return 1;
+    if (suffix1 && !suffix2) return -1;
+    if (suffix1 && suffix2) {
+        const match1 = suffix1.match(/([a-zA-Z]+)(?:-|\.)?(\d+)?/);
+        const match2 = suffix2.match(/([a-zA-Z]+)(?:-|\.)?(\d+)?/);
+        if (match1 && match2) {
+            const type1 = match1[1];
+            const type2 = match2[1];
+            if (type1 !== type2) return type1.localeCompare(type2);
+            const num1 = parseInt(match1[2] || 0, 10);
+            const num2 = parseInt(match2[2] || 0, 10);
+            if (num1 > num2) return 1;
+            if (num1 < num2) return -1;
+        }
+        return suffix1.localeCompare(suffix2);
+    }
+    return 0;
+}
+
+function getZipWpVersion(zipPath) {
+    try {
+        const output = execFileSync('unzip', ['-p', zipPath, 'wordpress/wp-includes/version.php'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const match = output.match(/\$wp_version\s*=\s*'([^']+)';/);
+        return match ? match[1] : null;
+    } catch(e) {
+        return null;
+    }
+}
+
+async function handleBatchUpdate() {
+    let wpVersion = null;
+    const wpArgIndex = args.indexOf('--wp');
+    if (wpArgIndex !== -1 && args.length > wpArgIndex + 1) {
+        wpVersion = args[wpArgIndex + 1];
+    } else {
+        console.error("Error: Please specify a version with --wp <version> (e.g., --wp nightly, --wp 6.5)");
+        process.exit(1);
+    }
+
+    let url = '';
+    if (wpVersion === 'nightly') {
+        url = 'https://wordpress.org/nightly-builds/wordpress-latest.zip';
+    } else if (wpVersion === 'latest') {
+        url = 'https://wordpress.org/latest.zip';
+    } else {
+        url = `https://wordpress.org/wordpress-${wpVersion}.zip`;
+    }
+
+    const dest = path.join(os.tmpdir(), `wordpress-${wpVersion || 'latest'}.zip`);
+
+    console.log(`${colors.cyan}⬇️  Downloading WordPress ${colors.bright}${wpVersion}${colors.reset}${colors.cyan} from ${url} ...${colors.reset}`);
+    try {
+        await downloadFile(url, dest);
+        console.log(`${colors.green}✅ Download complete.${colors.reset}`);
+    } catch(e) {
+        console.error(`${colors.red}❌ Error downloading WordPress: ${e.message}${colors.reset}`);
+        process.exit(1);
+    }
+
+    const targetZipVersion = getZipWpVersion(dest);
+    const displayTargetVersion = targetZipVersion || wpVersion;
+    if (targetZipVersion) {
+        console.log(`${colors.blue}ℹ️  Target version identified from zip as: ${colors.bright}${targetZipVersion}${colors.reset}`);
+    }
+
+    const sites = getStudioSites();
+    if (!sites || sites.length === 0) {
+        console.log(`${colors.yellow}⚠️  No Studio sites found.${colors.reset}`);
+        try { fs.unlinkSync(dest); } catch(e) {}
+        process.exit(0);
+    }
+
+    console.log(`\n${colors.bright}🚀 Starting batch update for ${sites.length} sites...${colors.reset}\n`);
+
+    for (const site of sites) {
+        console.log(`${colors.blue}🔍 Checking site:${colors.reset} ${colors.bright}${site.name}${colors.reset} ${colors.dim}(${site.path})${colors.reset}`);
+        
+        try {
+            const versionOutput = execFileSync('studio', ['wp', '--path=' + site.path, 'core', 'version'], { encoding: 'utf8' }).trim();
+            const currentVersion = stripAnsi(versionOutput);
+            console.log(`   ${colors.dim}Current version:${colors.reset} ${currentVersion}`);
+
+            if (compareVersions(currentVersion, displayTargetVersion) >= 0 && !args.includes('--force')) {
+                console.log(`   ${colors.yellow}⏭️  Site version ${currentVersion} is >= target ${displayTargetVersion}. Skipping.${colors.reset}\n`);
+                continue;
+            }
+
+            console.log(`   ${colors.cyan}🔄 Updating site ${site.name} to ${displayTargetVersion}...${colors.reset}`);
+            const siteTempZip = path.join(site.path, 'wp-update-temp.zip');
+            fs.copyFileSync(dest, siteTempZip);
+            try {
+                execFileSync('studio', ['wp', '--path=' + site.path, 'core', 'update', 'wp-update-temp.zip'], { stdio: 'inherit' });
+                console.log(`   ${colors.green}✨ Successfully updated ${site.name}.${colors.reset}\n`);
+            } finally {
+                try { fs.unlinkSync(siteTempZip); } catch(e) {}
+            }
+        } catch(e) {
+            console.error(`   ${colors.red}❌ Failed to update site ${site.name}: ${e.message}${colors.reset}\n`);
+        }
+    }
+    
+    try { fs.unlinkSync(dest); } catch(e) {}
+    console.log(`${colors.green}${colors.bright}🎉 Batch update complete!${colors.reset}`);
+}
+
 
 // 主分发逻辑
 async function main() {
@@ -271,6 +428,7 @@ Commands:
   link [site-name]    Link current directory to a Studio site
   open [admin|site]   Open WP Admin or site frontend (uses cached status)
   env                 Show current link environment and status
+  batch-update        Batch update WP versions for all sites (e.g. --wp nightly)
 
 Options:
   --force, -f         Force overwrite existing symlink or directory (for 'link')
@@ -301,6 +459,9 @@ Any other command will be passed directly to the 'studio' CLI with the linked --
     } 
     else if (subCommand === 'env') {
         handleEnv();
+    }
+    else if (subCommand === 'batch-update') {
+        await handleBatchUpdate();
     }
     else {
         const env = readEnv();

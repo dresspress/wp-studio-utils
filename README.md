@@ -44,6 +44,14 @@ dp-studio open site     # Opens site frontend
 dp-studio env           # Refreshes local wp-studio-env.json with latest site status
 ```
 
+### 5. Batch update WordPress
+You can batch update all your local Studio sites to a specific WordPress version simultaneously:
+```bash
+dp-studio batch-update --wp nightly  # Updates all sites to the latest nightly build
+dp-studio batch-update --wp 6.5      # Updates all sites to version 6.5
+```
+This command downloads the WordPress zip once and applies it to all sites. It also smartly compares versions to skip sites that are already up-to-date.
+
 ## Alias (Recommended)
 
 To use `dp-studio` as a drop-in replacement for `studio`, add this to your `.zshrc`:
