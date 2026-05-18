@@ -44,22 +44,23 @@ dp-studio open site     # Opens site frontend
 dp-studio env           # Refreshes local wp-studio-env.json with latest site status
 ```
 
-### 5. Batch update WordPress
-You can batch update all your local Studio sites to a specific WordPress version simultaneously:
+### 5. Fast update WordPress for all sites
+You can fast update all your local Studio sites to a specific WordPress version simultaneously:
 ```bash
-dp-studio batch-update --wp nightly  # Updates all sites to the latest nightly build
-dp-studio batch-update --wp 6.5      # Updates all sites to version 6.5
+dp-studio site fast-update-all --wp nightly  # Updates all sites to the latest nightly build
+dp-studio site fast-update-all --wp 6.5      # Updates all sites to version 6.5
 ```
 This command downloads the WordPress zip once and applies it to all sites. It also smartly compares versions to skip sites that are already up-to-date.
 
-### 6. Batch set Studio site options
-You can also apply any `studio site set` options to all local Studio sites:
+### 6. Run site commands for all sites
+You can apply `studio site` commands to all local Studio sites:
 ```bash
-dp-studio batch-set --php 8.4
-dp-studio batch-set --debug-log --debug-display
-dp-studio batch-set --wp nightly
+dp-studio site set-all --php 8.4
+dp-studio site set-all --debug-log --debug-display
+dp-studio site start-all
+dp-studio site stop-all
 ```
-This command forwards the provided options to `studio site set` for each site. Do not pass `--path`; `dp-studio` sets the target site path automatically.
+`set-all`, `start-all`, and `stop-all` forward the provided options to `studio site <command>` for each site. Do not pass `--path`; `dp-studio` sets the target site path automatically.
 
 ## Alias (Recommended)
 

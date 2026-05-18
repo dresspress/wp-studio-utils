@@ -388,13 +388,18 @@ function syncWordPressCoreFiles(sourceRoot, sitePath) {
     }
 }
 
-async function handleBatchUpdate() {
+function getSiteFastUpdateArgs() {
+    return args.slice(2);
+}
+
+async function handleSiteFastUpdate() {
+    const commandArgs = getSiteFastUpdateArgs();
     let wpVersion = null;
-    const wpArgIndex = args.indexOf('--wp');
-    if (wpArgIndex !== -1 && args.length > wpArgIndex + 1) {
-        wpVersion = args[wpArgIndex + 1];
+    const wpArgIndex = commandArgs.indexOf('--wp');
+    if (wpArgIndex !== -1 && commandArgs.length > wpArgIndex + 1) {
+        wpVersion = commandArgs[wpArgIndex + 1];
     } else {
-        console.error("Error: Please specify a version with --wp <version> (e.g., --wp nightly, --wp 6.5)");
+        console.error("Error: Please specify a version with --wp <version> (e.g., site fast-update-all --wp nightly)");
         process.exit(1);
     }
 
@@ -456,7 +461,7 @@ async function handleBatchUpdate() {
 
             console.log(`   ${colors.dim}Current version:${colors.reset} ${currentVersion}`);
 
-            if (compareVersions(currentVersion, displayTargetVersion) >= 0 && !args.includes('--force')) {
+            if (compareVersions(currentVersion, displayTargetVersion) >= 0 && !commandArgs.includes('--force')) {
                 console.log(`   ${colors.yellow}⏭️  Site version ${currentVersion} is >= target ${displayTargetVersion}. Skipping.${colors.reset}\n`);
                 continue;
             }
@@ -477,31 +482,24 @@ async function handleBatchUpdate() {
     
     try { fs.unlinkSync(dest); } catch(e) {}
     try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch(e) {}
-    console.log(`${colors.green}${colors.bright}🎉 Batch update complete!${colors.reset}`);
+    console.log(`${colors.green}${colors.bright}🎉 Fast update complete!${colors.reset}`);
 }
 
 function hasPathArgument(commandArgs) {
     return commandArgs.includes('--path') || commandArgs.some((arg) => arg.startsWith('--path='));
 }
 
-function getBatchSetArgs() {
-    return args.slice(1);
+function getSiteSetAllArgs() {
+    return args.slice(2);
 }
 
 function isNoChangesToApplyOutput(output) {
     return output.includes('No changes to apply. The site already has the specified settings.');
 }
 
-function handleBatchSet() {
-    const setArgs = getBatchSetArgs();
-
-    if (setArgs.length === 0) {
-        console.error("Error: Please provide at least one 'studio site set' option (e.g. batch-set --php 8.4).");
-        process.exit(1);
-    }
-
-    if (hasPathArgument(setArgs)) {
-        console.error("Error: Do not pass --path to batch-set. The command automatically applies options to each Studio site.");
+function runSiteCommandForAll(actionLabel, studioArgs) {
+    if (hasPathArgument(studioArgs)) {
+        console.error(`Error: Do not pass --path to site ${actionLabel}. The command automatically applies options to each Studio site.`);
         process.exit(1);
     }
 
@@ -511,13 +509,13 @@ function handleBatchSet() {
         process.exit(0);
     }
 
-    console.log(`\n${colors.bright}🚀 Starting batch set for ${sites.length} sites...${colors.reset}\n`);
+    console.log(`\n${colors.bright}🚀 Starting site ${actionLabel} for ${sites.length} sites...${colors.reset}\n`);
 
     for (const site of sites) {
-        console.log(`${colors.blue}🔧 Setting site:${colors.reset} ${colors.bright}${site.name}${colors.reset} ${colors.dim}(${site.path})${colors.reset}`);
+        console.log(`${colors.blue}🔧 Site ${actionLabel}:${colors.reset} ${colors.bright}${site.name}${colors.reset} ${colors.dim}(${site.path})${colors.reset}`);
 
         try {
-            const result = spawnSync('studio', ['site', 'set', '--path', site.path, ...setArgs], {
+            const result = spawnSync('studio', [...studioArgs, '--path', site.path], {
                 encoding: 'utf8'
             });
 
@@ -535,7 +533,7 @@ function handleBatchSet() {
                     continue;
                 }
 
-                throw new Error(stripAnsi(combinedOutput).trim() || `studio site set exited with code ${result.status}`);
+                throw new Error(stripAnsi(combinedOutput).trim() || `studio ${studioArgs.join(' ')} exited with code ${result.status}`);
             }
 
             if (combinedOutput.trim()) {
@@ -545,13 +543,42 @@ function handleBatchSet() {
                 }
             }
 
-            console.log(`   ${colors.green}✨ Successfully updated settings for ${site.name}.${colors.reset}\n`);
+            console.log(`   ${colors.green}✨ Successfully completed ${actionLabel} for ${site.name}.${colors.reset}\n`);
         } catch (e) {
-            console.error(`   ${colors.red}❌ Failed to set options for ${site.name}: ${e.message}${colors.reset}\n`);
+            console.error(`   ${colors.red}❌ Failed to run ${actionLabel} for ${site.name}: ${e.message}${colors.reset}\n`);
         }
     }
 
-    console.log(`${colors.green}${colors.bright}🎉 Batch set complete!${colors.reset}`);
+    console.log(`${colors.green}${colors.bright}🎉 Site ${actionLabel} complete!${colors.reset}`);
+}
+
+function handleSiteSetAll() {
+    const setArgs = getSiteSetAllArgs();
+
+    if (setArgs.length === 0) {
+        console.error("Error: Please provide at least one 'studio site set' option (e.g. site set-all --php 8.4).");
+        process.exit(1);
+    }
+
+    runSiteCommandForAll('set-all', ['site', 'set', ...setArgs]);
+}
+
+function handleSiteStartAll() {
+    const startArgs = args.slice(2);
+    if (startArgs.length > 0 && hasPathArgument(startArgs)) {
+        console.error("Error: Do not pass --path to site start-all. The command automatically applies options to each Studio site.");
+        process.exit(1);
+    }
+    runSiteCommandForAll('start-all', ['site', 'start', ...startArgs]);
+}
+
+function handleSiteStopAll() {
+    const stopArgs = args.slice(2);
+    if (stopArgs.length > 0 && hasPathArgument(stopArgs)) {
+        console.error("Error: Do not pass --path to site stop-all. The command automatically applies options to each Studio site.");
+        process.exit(1);
+    }
+    runSiteCommandForAll('stop-all', ['site', 'stop', ...stopArgs]);
 }
 
 
@@ -565,8 +592,10 @@ Commands:
   link [site-name]    Link current directory to a Studio site
   open [admin|site]   Open WP Admin or site frontend (uses cached status)
   env                 Show current link environment and status
-  batch-update        Batch update WP versions for all sites (e.g. --wp nightly)
-  batch-set           Apply 'studio site set' options to all sites
+  site set-all        Apply 'studio site set' options to all sites
+  site start-all      Start all sites
+  site stop-all       Stop all sites
+  site fast-update-all  Fast update WordPress core for all sites (e.g. --wp nightly)
 
 Options:
   --force, -f         Force overwrite existing symlink or directory (for 'link')
@@ -598,11 +627,17 @@ Any other command will be passed directly to the 'studio' CLI with the linked --
     else if (subCommand === 'env') {
         handleEnv();
     }
-    else if (subCommand === 'batch-update') {
-        await handleBatchUpdate();
+    else if (subCommand === 'site' && args[1] === 'set-all') {
+        handleSiteSetAll();
     }
-    else if (subCommand === 'batch-set') {
-        handleBatchSet();
+    else if (subCommand === 'site' && args[1] === 'start-all') {
+        handleSiteStartAll();
+    }
+    else if (subCommand === 'site' && args[1] === 'stop-all') {
+        handleSiteStopAll();
+    }
+    else if (subCommand === 'site' && args[1] === 'fast-update-all') {
+        await handleSiteFastUpdate();
     }
     else {
         const env = readEnv();
