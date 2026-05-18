@@ -52,6 +52,15 @@ dp-studio batch-update --wp 6.5      # Updates all sites to version 6.5
 ```
 This command downloads the WordPress zip once and applies it to all sites. It also smartly compares versions to skip sites that are already up-to-date.
 
+### 6. Batch set Studio site options
+You can also apply any `studio site set` options to all local Studio sites:
+```bash
+dp-studio batch-set --php 8.4
+dp-studio batch-set --debug-log --debug-display
+dp-studio batch-set --wp nightly
+```
+This command forwards the provided options to `studio site set` for each site. Do not pass `--path`; `dp-studio` sets the target site path automatically.
+
 ## Alias (Recommended)
 
 To use `dp-studio` as a drop-in replacement for `studio`, add this to your `.zshrc`:

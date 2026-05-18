@@ -480,6 +480,80 @@ async function handleBatchUpdate() {
     console.log(`${colors.green}${colors.bright}🎉 Batch update complete!${colors.reset}`);
 }
 
+function hasPathArgument(commandArgs) {
+    return commandArgs.includes('--path') || commandArgs.some((arg) => arg.startsWith('--path='));
+}
+
+function getBatchSetArgs() {
+    return args.slice(1);
+}
+
+function isNoChangesToApplyOutput(output) {
+    return output.includes('No changes to apply. The site already has the specified settings.');
+}
+
+function handleBatchSet() {
+    const setArgs = getBatchSetArgs();
+
+    if (setArgs.length === 0) {
+        console.error("Error: Please provide at least one 'studio site set' option (e.g. batch-set --php 8.4).");
+        process.exit(1);
+    }
+
+    if (hasPathArgument(setArgs)) {
+        console.error("Error: Do not pass --path to batch-set. The command automatically applies options to each Studio site.");
+        process.exit(1);
+    }
+
+    const sites = getStudioSites();
+    if (!sites || sites.length === 0) {
+        console.log(`${colors.yellow}⚠️  No Studio sites found.${colors.reset}`);
+        process.exit(0);
+    }
+
+    console.log(`\n${colors.bright}🚀 Starting batch set for ${sites.length} sites...${colors.reset}\n`);
+
+    for (const site of sites) {
+        console.log(`${colors.blue}🔧 Setting site:${colors.reset} ${colors.bright}${site.name}${colors.reset} ${colors.dim}(${site.path})${colors.reset}`);
+
+        try {
+            const result = spawnSync('studio', ['site', 'set', '--path', site.path, ...setArgs], {
+                encoding: 'utf8'
+            });
+
+            if (result.error) {
+                throw result.error;
+            }
+
+            const combinedOutput = [result.stdout, result.stderr]
+                .filter(Boolean)
+                .join('\n');
+
+            if (result.status !== 0) {
+                if (isNoChangesToApplyOutput(combinedOutput)) {
+                    console.log(`   ${colors.yellow}⏭️  No changes needed for ${site.name}.${colors.reset}\n`);
+                    continue;
+                }
+
+                throw new Error(stripAnsi(combinedOutput).trim() || `studio site set exited with code ${result.status}`);
+            }
+
+            if (combinedOutput.trim()) {
+                process.stdout.write(combinedOutput);
+                if (!combinedOutput.endsWith('\n')) {
+                    process.stdout.write('\n');
+                }
+            }
+
+            console.log(`   ${colors.green}✨ Successfully updated settings for ${site.name}.${colors.reset}\n`);
+        } catch (e) {
+            console.error(`   ${colors.red}❌ Failed to set options for ${site.name}: ${e.message}${colors.reset}\n`);
+        }
+    }
+
+    console.log(`${colors.green}${colors.bright}🎉 Batch set complete!${colors.reset}`);
+}
+
 
 // 主分发逻辑
 async function main() {
@@ -492,6 +566,7 @@ Commands:
   open [admin|site]   Open WP Admin or site frontend (uses cached status)
   env                 Show current link environment and status
   batch-update        Batch update WP versions for all sites (e.g. --wp nightly)
+  batch-set           Apply 'studio site set' options to all sites
 
 Options:
   --force, -f         Force overwrite existing symlink or directory (for 'link')
@@ -525,6 +600,9 @@ Any other command will be passed directly to the 'studio' CLI with the linked --
     }
     else if (subCommand === 'batch-update') {
         await handleBatchUpdate();
+    }
+    else if (subCommand === 'batch-set') {
+        handleBatchSet();
     }
     else {
         const env = readEnv();
