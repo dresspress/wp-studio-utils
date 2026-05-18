@@ -341,6 +341,53 @@ function getZipWpVersion(zipPath) {
     }
 }
 
+function getSiteWpVersion(sitePath) {
+    const versionFilePath = path.join(sitePath, 'wp-includes', 'version.php');
+    try {
+        const versionFileContents = fs.readFileSync(versionFilePath, 'utf8');
+        const match = versionFileContents.match(/\$wp_version\s*=\s*'([^']+)';/);
+        return match ? match[1] : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function extractWordPressZip(zipPath, extractDir) {
+    fs.rmSync(extractDir, { recursive: true, force: true });
+    fs.mkdirSync(extractDir, { recursive: true });
+    execFileSync('unzip', ['-q', zipPath, '-d', extractDir], { stdio: 'inherit' });
+}
+
+function syncDirectory(sourceDir, destDir) {
+    execFileSync('rsync', ['-a', '--delete', `${sourceDir}/`, `${destDir}/`], { stdio: 'inherit' });
+}
+
+function syncWordPressCoreFiles(sourceRoot, sitePath) {
+    syncDirectory(path.join(sourceRoot, 'wp-admin'), path.join(sitePath, 'wp-admin'));
+    syncDirectory(path.join(sourceRoot, 'wp-includes'), path.join(sitePath, 'wp-includes'));
+
+    const rootEntries = fs.readdirSync(sourceRoot, { withFileTypes: true });
+
+    for (const entry of rootEntries) {
+        if (!entry.isFile()) {
+            continue;
+        }
+
+        if (entry.name === 'wp-config.php') {
+            continue;
+        }
+
+        const sourcePath = path.join(sourceRoot, entry.name);
+        const destPath = path.join(sitePath, entry.name);
+        fs.copyFileSync(sourcePath, destPath);
+    }
+
+    const sampleConfigPath = path.join(sourceRoot, 'wp-config-sample.php');
+    if (fs.existsSync(sampleConfigPath)) {
+        fs.copyFileSync(sampleConfigPath, path.join(sitePath, 'wp-config-sample.php'));
+    }
+}
+
 async function handleBatchUpdate() {
     let wpVersion = null;
     const wpArgIndex = args.indexOf('--wp');
@@ -373,9 +420,20 @@ async function handleBatchUpdate() {
 
     const targetZipVersion = getZipWpVersion(dest);
     const displayTargetVersion = targetZipVersion || wpVersion;
+    const extractDir = path.join(os.tmpdir(), `dp-studio-wordpress-${Date.now()}`);
     if (targetZipVersion) {
         console.log(`${colors.blue}ℹ️  Target version identified from zip as: ${colors.bright}${targetZipVersion}${colors.reset}`);
     }
+
+    try {
+        extractWordPressZip(dest, extractDir);
+    } catch (e) {
+        console.error(`${colors.red}❌ Error extracting WordPress zip: ${e.message}${colors.reset}`);
+        try { fs.unlinkSync(dest); } catch(err) {}
+        process.exit(1);
+    }
+
+    const extractedWordPressRoot = path.join(extractDir, 'wordpress');
 
     const sites = getStudioSites();
     if (!sites || sites.length === 0) {
@@ -388,10 +446,14 @@ async function handleBatchUpdate() {
 
     for (const site of sites) {
         console.log(`${colors.blue}🔍 Checking site:${colors.reset} ${colors.bright}${site.name}${colors.reset} ${colors.dim}(${site.path})${colors.reset}`);
-        
+
         try {
-            const versionOutput = execFileSync('studio', ['wp', '--path=' + site.path, 'core', 'version'], { encoding: 'utf8' }).trim();
-            const currentVersion = stripAnsi(versionOutput);
+            const currentVersion = getSiteWpVersion(site.path);
+
+            if (!currentVersion) {
+                throw new Error('Could not determine current WordPress version from wp-includes/version.php');
+            }
+
             console.log(`   ${colors.dim}Current version:${colors.reset} ${currentVersion}`);
 
             if (compareVersions(currentVersion, displayTargetVersion) >= 0 && !args.includes('--force')) {
@@ -400,20 +462,21 @@ async function handleBatchUpdate() {
             }
 
             console.log(`   ${colors.cyan}🔄 Updating site ${site.name} to ${displayTargetVersion}...${colors.reset}`);
-            const siteTempZip = path.join(site.path, 'wp-update-temp.zip');
-            fs.copyFileSync(dest, siteTempZip);
-            try {
-                execFileSync('studio', ['wp', '--path=' + site.path, 'core', 'update', 'wp-update-temp.zip'], { stdio: 'inherit' });
-                console.log(`   ${colors.green}✨ Successfully updated ${site.name}.${colors.reset}\n`);
-            } finally {
-                try { fs.unlinkSync(siteTempZip); } catch(e) {}
+            syncWordPressCoreFiles(extractedWordPressRoot, site.path);
+            const updatedVersion = getSiteWpVersion(site.path);
+
+            if (!updatedVersion) {
+                throw new Error('Core files were copied, but the updated version could not be read');
             }
+
+            console.log(`   ${colors.green}✨ Successfully updated ${site.name} to ${updatedVersion}.${colors.reset}\n`);
         } catch(e) {
             console.error(`   ${colors.red}❌ Failed to update site ${site.name}: ${e.message}${colors.reset}\n`);
         }
     }
     
     try { fs.unlinkSync(dest); } catch(e) {}
+    try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch(e) {}
     console.log(`${colors.green}${colors.bright}🎉 Batch update complete!${colors.reset}`);
 }
 
